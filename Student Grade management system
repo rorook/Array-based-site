@@ -1,0 +1,245 @@
+// Student Grade Management System
+// A menu-driven C++ program that keeps student marks in an array and lets
+// the user add, view, search, sort, delete and analyse them.
+
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+
+using namespace std;
+
+const int MAX_STUDENTS = 100;  // capacity of the array
+const int NAME_WIDTH = 24;     // column width used when printing names
+
+struct Student {
+    string name;
+    double mark;
+};
+
+// ---------------------------------------------------------------
+// Input helpers
+// ---------------------------------------------------------------
+
+string trim(const string &text) {
+    size_t start = text.find_first_not_of(" \t\r\n");
+    if (start == string::npos) return "";
+    size_t end = text.find_last_not_of(" \t\r\n");
+    return text.substr(start, end - start + 1);
+}
+
+string toLower(string text) {
+    transform(text.begin(), text.end(), text.begin(),
+              [](unsigned char c) { return static_cast<char>(tolower(c)); });
+    return text;
+}
+
+string readLine(const string &prompt) {
+    string line;
+    cout << prompt;
+    if (!getline(cin, line)) {  // input closed (end of file)
+        cout << "\nInput ended. Goodbye!\n";
+        exit(0);
+    }
+    return line;
+}
+
+int readInt(const string &prompt, int low, int high) {
+    while (true) {
+        string line = trim(readLine(prompt));
+        try {
+            size_t used = 0;
+            int value = stoi(line, &used);
+            if (used == line.size() && value >= low && value <= high) return value;
+        } catch (const exception &) {
+            // not a number: fall through to the error message
+        }
+        cout << "  Enter a whole number from " << low << " to " << high << ".\n";
+    }
+}
+
+double readMark(const string &prompt) {
+    while (true) {
+        string line = trim(readLine(prompt));
+        try {
+            size_t used = 0;
+            double value = stod(line, &used);
+            if (used == line.size() && value >= 0 && value <= 100) return value;
+        } catch (const exception &) {
+            // not a number: fall through to the error message
+        }
+        cout << "  Enter a mark between 0 and 100.\n";
+    }
+}
+
+// ---------------------------------------------------------------
+// Display helpers
+// ---------------------------------------------------------------
+
+// Change these boundaries to match your school's grading scale.
+char letterGrade(double mark) {
+    if (mark >= 80) return 'A';
+    if (mark >= 70) return 'B';
+    if (mark >= 60) return 'C';
+    if (mark >= 50) return 'D';
+    return 'F';
+}
+
+void printHeader() {
+    cout << "\n"
+         << left << setw(5) << "No." << setw(NAME_WIDTH) << "Name"
+         << setw(8) << "Mark" << "Grade\n"
+         << string(NAME_WIDTH + 18, '-') << "\n";
+}
+
+void printStudent(int number, const Student &s) {
+    cout << left << setw(5) << number
+         << setw(NAME_WIDTH) << s.name.substr(0, NAME_WIDTH - 1)
+         << fixed << setprecision(1) << setw(8) << s.mark
+         << letterGrade(s.mark) << "\n";
+}
+
+// ---------------------------------------------------------------
+// Array operations
+// ---------------------------------------------------------------
+
+// Insert: place the new record in the next free slot of the array.
+void addStudent(Student arr[], int &count) {
+    if (count >= MAX_STUDENTS) {
+        cout << "The array is full (" << MAX_STUDENTS << " students).\n";
+        return;
+    }
+    string name;
+    while (name.empty()) name = trim(readLine("Student name: "));
+    arr[count].name = name;
+    arr[count].mark = readMark("Mark (0-100): ");
+    count++;
+    cout << "Added " << name << ".\n";
+}
+
+// Traverse: visit every element from index 0 to count - 1.
+void displayAll(const Student arr[], int count) {
+    if (count == 0) {
+        cout << "No students yet.\n";
+        return;
+    }
+    printHeader();
+    for (int i = 0; i < count; i++) printStudent(i + 1, arr[i]);
+}
+
+// Linear search: compare the search text with each name in turn.
+void searchStudent(const Student arr[], int count) {
+    if (count == 0) {
+        cout << "No students yet.\n";
+        return;
+    }
+    string query = trim(readLine("Search for: "));
+    string key = toLower(query);
+    bool found = false;
+    for (int i = 0; i < count; i++) {
+        if (toLower(arr[i].name).find(key) != string::npos) {
+            if (!found) printHeader();
+            printStudent(i + 1, arr[i]);
+            found = true;
+        }
+    }
+    if (!found) cout << "No student matches \"" << query << "\".\n";
+}
+
+// Selection sort: repeatedly move the highest remaining mark to the front.
+void sortByMark(Student arr[], int count) {
+    if (count < 2) {
+        cout << "Nothing to sort.\n";
+        return;
+    }
+    for (int i = 0; i < count - 1; i++) {
+        int best = i;
+        for (int j = i + 1; j < count; j++)
+            if (arr[j].mark > arr[best].mark) best = j;
+        swap(arr[i], arr[best]);
+    }
+    cout << "Sorted from highest to lowest mark.\n";
+}
+
+// Traverse once to find the total, the highest and the lowest mark.
+void showStatistics(const Student arr[], int count) {
+    if (count == 0) {
+        cout << "No students yet.\n";
+        return;
+    }
+    double total = 0;
+    int highest = 0, lowest = 0;
+    for (int i = 0; i < count; i++) {
+        total += arr[i].mark;
+        if (arr[i].mark > arr[highest].mark) highest = i;
+        if (arr[i].mark < arr[lowest].mark) lowest = i;
+    }
+    cout << fixed << setprecision(2)
+         << "\nStudents : " << count << "\n"
+         << "Average  : " << total / count << "\n"
+         << "Highest  : " << arr[highest].mark << " (" << arr[highest].name << ")\n"
+         << "Lowest   : " << arr[lowest].mark << " (" << arr[lowest].name << ")\n";
+}
+
+// Delete: close the gap by shifting every later element one place left.
+void deleteStudent(Student arr[], int &count) {
+    if (count == 0) {
+        cout << "No students yet.\n";
+        return;
+    }
+    displayAll(arr, count);
+    int number = readInt("Number to delete (0 to cancel): ", 0, count);
+    if (number == 0) return;
+    string removed = arr[number - 1].name;
+    for (int i = number - 1; i < count - 1; i++) arr[i] = arr[i + 1];
+    count--;
+    cout << "Removed " << removed << ".\n";
+}
+
+// Fill the array from two small arrays so the program can be demoed quickly.
+void loadSampleData(Student arr[], int &count) {
+    const string names[] = {"Alice Johnson", "Brian Lee", "Chloe Adams",
+                            "David Okoye", "Emma Wilson"};
+    const double marks[] = {78.5, 91.0, 64.0, 55.5, 82.0};
+    for (int i = 0; i < 5 && count < MAX_STUDENTS; i++) {
+        arr[count].name = names[i];
+        arr[count].mark = marks[i];
+        count++;
+    }
+    cout << "Sample data loaded.\n";
+}
+
+// ---------------------------------------------------------------
+// Main menu
+// ---------------------------------------------------------------
+
+int main() {
+    Student students[MAX_STUDENTS] = {};  // fixed-size array of records
+    int count = 0;                        // how many slots are in use
+
+    while (true) {
+        cout << "\n===== Student Grade Management System =====\n"
+             << "1. Add student\n"
+             << "2. View all students\n"
+             << "3. Search by name\n"
+             << "4. Sort by mark (high to low)\n"
+             << "5. Statistics (average, highest, lowest)\n"
+             << "6. Delete student\n"
+             << "7. Load sample data\n"
+             << "0. Exit\n";
+
+        switch (readInt("Choose an option: ", 0, 7)) {
+            case 1: addStudent(students, count); break;
+            case 2: displayAll(students, count); break;
+            case 3: searchStudent(students, count); break;
+            case 4: sortByMark(students, count); break;
+            case 5: showStatistics(students, count); break;
+            case 6: deleteStudent(students, count); break;
+            case 7: loadSampleData(students, count); break;
+            case 0: cout << "Goodbye!\n"; return 0;
+        }
+    }
+}
